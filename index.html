@@ -1,0 +1,491 @@
+const SUPABASE_URL =https://sbtefkcqrfnojmntpefy.supabase.co/rest/v1/
+const SUPABASE_KEY =eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGVma2NxcmZub2ptbnRwZWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzM2NjgsImV4cCI6MjA5OTM0OTY2OH0.vAaoXCNqpPDLlESsv7bhT0abzcLQyLtdKL3NrZplcLo
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Kea King 养成游戏</title>
+    <style>
+        :root {
+            --pink: #ff7eb3; --peach: #ffa78c; --cream: #fff5ee;
+            --text: #4a3040; --card-bg: rgba(255,255,255,0.7);
+            --shadow: 0 8px 25px rgba(255,140,160,0.25);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Serif SC', 'PingFang SC', 'SimSun', serif;
+            background: #2c1a2a; min-height: 100vh; overflow-x: hidden;
+            color: var(--text); user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        #scene {
+            position: relative; min-height: 100vh;
+            background: linear-gradient(180deg, #ffd1b3 0%, #ffe4d0 15%, #fff0e8 40%, #fdd8c0 70%, #e8b89d 100%);
+            overflow: hidden;
+        }
+        .window-light {
+            position: absolute; top: 0; width: 25%; height: 65%;
+            background: linear-gradient(180deg, rgba(255,255,240,0.7) 0%, rgba(255,240,220,0.3) 60%, transparent 100%);
+            transform: skewX(-8deg); pointer-events: none;
+        }
+        .window-light.left { left: 10%; } .window-light.right { right: 10%; transform: skewX(8deg); }
+        .floor-line {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+            background: repeating-linear-gradient(90deg, rgba(180,140,120,0.3) 0px, rgba(180,140,120,0.3) 40px, transparent 40px, transparent 80px);
+        }
+        .baseboard {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 12px;
+            background: linear-gradient(180deg, #c49a80, #a07060);
+        }
+        .particle {
+            position: absolute; pointer-events: none; animation: fall linear forwards;
+            font-size: 22px; z-index: 5;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-5vh) rotate(0deg) scale(1); opacity: 1; }
+            70% { opacity: 0.9; }
+            100% { transform: translateY(105vh) rotate(360deg) scale(0.3); opacity: 0; }
+        }
+        #loading {
+            position: fixed; inset: 0; z-index: 999; background: linear-gradient(135deg, #2c1a2a, #5c3a5c);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--cream); transition: opacity 0.8s;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+        .loading-frame {
+            border: 3px solid var(--pink); border-radius: 15px; padding: 30px;
+            text-align: center; background: rgba(0,0,0,0.3);
+        }
+        .loading-frame img {
+            width: 100px; height: 100px; border-radius: 15px; object-fit: cover;
+            border: 2px solid var(--peach); margin-bottom: 15px;
+        }
+        .loading-dots::after { content: ''; animation: dots 1.5s infinite; }
+        @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+        .title-bar {
+            position: sticky; top: 0; z-index: 20; background: rgba(255,245,238,0.85);
+            backdrop-filter: blur(15px); padding: 12px 18px; display: flex;
+            justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,150,150,0.3);
+        }
+        .title-bar h1 {
+            font-size: 18px; background: linear-gradient(135deg, #e87890, #c070a0);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;
+        }
+        .title-bar .player-tag {
+            background: var(--pink); color: white; padding: 5px 14px; border-radius: 15px; font-size: 12px;
+        }
+        .friends-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+            padding: 25px 20px 120px; position: relative; z-index: 10; max-width: 450px; margin: 0 auto;
+        }
+        .friend-card {
+            background: var(--card-bg); backdrop-filter: blur(10px); border-radius: 20px;
+            padding: 18px 12px 14px; text-align: center; cursor: pointer; transition: all 0.3s;
+            border: 2px solid rgba(255,180,180,0.3); box-shadow: var(--shadow);
+            position: relative; animation: floatCard 3s ease-in-out infinite;
+        }
+        .friend-card:nth-child(even) { animation-delay: 0.5s; } .friend-card:nth-child(3n) { animation-delay: 1s; }
+        @keyframes floatCard {
+            0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); }
+        }
+        .friend-card:active { transform: scale(0.94); border-color: var(--pink); box-shadow: 0 0 30px rgba(255,140,160,0.5); }
+        .friend-card img {
+            width: 85px; height: 85px; border-radius: 50%; object-fit: cover;
+            border: 3px solid var(--peach); box-shadow: 0 0 20px rgba(255,150,150,0.4); margin-bottom: 8px;
+        }
+        .friend-card .name { font-weight: 700; font-size: 15px; color: #5a3040; margin-bottom: 4px; }
+        .friend-card .hearts {
+            font-size: 13px; color: var(--pink); background: rgba(255,200,200,0.3);
+            display: inline-block; padding: 3px 12px; border-radius: 12px;
+        }
+        .friend-card .badge {
+            position: absolute; top: 8px; right: 8px; background: linear-gradient(135deg, #ffd700, #ffaa00);
+            color: white; font-size: 9px; font-weight: bold; padding: 3px 7px; border-radius: 8px;
+        }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #b09090; font-size: 14px; }
+        #dialog-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+            background: linear-gradient(180deg, rgba(60,30,40,0.9) 0%, rgba(40,20,30,0.95) 100%);
+            backdrop-filter: blur(15px); border-top: 3px solid rgba(255,180,180,0.4);
+            border-radius: 25px 25px 0 0; padding: 8px 15px 12px; color: var(--cream);
+        }
+        #dialog-nav .nav-speaker {
+            position: absolute; top: -17px; left: 30px; background: var(--pink);
+            color: white; padding: 4px 18px; border-radius: 15px; font-size: 13px; font-weight: bold;
+        }
+        #dialog-nav .nav-buttons { display: flex; gap: 10px; margin-top: 5px; }
+        .nav-btn {
+            flex: 1; padding: 12px 8px; border: 2px solid rgba(255,200,200,0.3);
+            background: rgba(255,255,255,0.06); color: var(--cream); border-radius: 15px;
+            font-size: 14px; cursor: pointer; transition: 0.2s; font-family: inherit; text-align: center;
+        }
+        .nav-btn:active { background: rgba(255,140,160,0.3); border-color: var(--pink); color: white; }
+        .nav-btn.active { background: var(--pink); border-color: var(--pink); color: white; }
+        #interact-modal {
+            position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.7);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #interact-modal.hidden { display: none; }
+        .interact-card {
+            background: linear-gradient(180deg, #fff5ee, #ffe8dc); border-radius: 22px;
+            padding: 25px 20px; width: 90%; max-width: 360px; text-align: center;
+            border: 2px solid var(--peach); box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        .interact-card img {
+            width: 100px; height: 100px; border-radius: 50%; object-fit: cover;
+            border: 3px solid var(--pink); margin-bottom: 10px;
+        }
+        .interact-card .dialog-box {
+            background: white; border-radius: 15px; padding: 15px; margin: 12px 0;
+            font-size: 14px; border-left: 4px solid var(--pink); text-align: left; line-height: 1.6;
+        }
+        .choice-grid { display: flex; flex-direction: column; gap: 8px; }
+        .choice-btn {
+            background: white; border: 2px solid #f0d0d0; padding: 12px 15px;
+            border-radius: 12px; font-size: 14px; cursor: pointer; font-family: inherit; transition: 0.2s; text-align: left;
+        }
+        .choice-btn:active { border-color: var(--pink); background: #fff0f5; }
+        .choice-btn.correct { border-color: #4caf50 !important; background: #e8f5e9 !important; }
+        .choice-btn.wrong { border-color: #f44336 !important; background: #ffebee !important; }
+        #minigame-area {
+            position: relative; height: 180px; background: #fff0f0; border-radius: 15px;
+            margin: 12px 0; overflow: hidden; border: 2px dashed var(--peach);
+        }
+        #target-btn {
+            position: absolute; width: 50px; height: 50px; background: var(--pink);
+            border-radius: 50%; cursor: pointer; font-size: 24px; display: flex;
+            align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(255,100,130,0.5);
+            animation: pulse 0.6s infinite alternate;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
+        #ranking-page {
+            position: fixed; inset: 0; z-index: 60; background: linear-gradient(180deg, #fff5ee, #ffe8dc); overflow-y: auto;
+        }
+        #ranking-page.hidden { display: none; }
+        .rank-header {
+            position: sticky; top: 0; background: rgba(255,245,238,0.9); backdrop-filter: blur(10px);
+            padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(255,150,150,0.2);
+        }
+        .rank-item {
+            display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid rgba(0,0,0,0.05);
+            background: white; margin: 8px 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .rank-num { font-size: 20px; font-weight: bold; width: 35px; }
+        .rank-num.gold { color: #ffd700; } .rank-num.silver { color: #c0c0c0; } .rank-num.bronze { color: #cd7f32; }
+        .rank-info { flex: 1; }
+        .rank-name { font-weight: 600; }
+        .rank-player { font-size: 12px; color: #999; }
+        .rank-hearts { color: var(--pink); font-weight: bold; }
+        #name-modal {
+            position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #name-modal.hidden { display: none; }
+        .name-card {
+            background: white; border-radius: 20px; padding: 25px; text-align: center; width: 85%; max-width: 320px;
+        }
+        .name-card input {
+            padding: 10px 15px; border: 2px solid #e0d0d0; border-radius: 10px;
+            font-size: 16px; width: 85%; margin: 15px 0; font-family: inherit;
+        }
+    </style>
+</head>
+<body>
+<div id="scene">
+    <div class="window-light left"></div>
+    <div class="window-light right"></div>
+    <div class="floor-line" style="bottom:35%;"></div>
+    <div class="floor-line" style="bottom:18%;"></div>
+    <div class="baseboard"></div>
+</div>
+
+<div id="loading">
+    <div class="loading-frame">
+        <img id="loading-img" src="" alt="">
+        <p>正在进入 Kea King<span class="loading-dots"></span></p>
+    </div>
+</div>
+
+<div id="name-modal">
+    <div class="name-card">
+        <h3>🌸 老师，请告诉我你的名字</h3>
+        <input type="text" id="player-name-input" placeholder="你的昵称" maxlength="12">
+        <br>
+        <button class="nav-btn active" onclick="savePlayerName()" style="width:80%;">进入校园</button>
+    </div>
+</div>
+
+<div id="main-page">
+    <div class="title-bar">
+        <h1>🏫 Kea King 养成游戏</h1>
+        <span class="player-tag">👤 <span id="player-display">老师</span></span>
+    </div>
+    <div class="friends-grid" id="friends-grid"></div>
+</div>
+
+<div id="dialog-nav">
+    <div class="nav-speaker">📢 选择行动</div>
+    <div class="nav-buttons">
+        <button class="nav-btn active" onclick="showMain()">🏠 大厅</button>
+        <button class="nav-btn" onclick="showRanking()">🏆 排行榜</button>
+        <button class="nav-btn" onclick="showMain()">🔄 刷新</button>
+    </div>
+</div>
+
+<div id="interact-modal" class="hidden">
+    <div class="interact-card">
+        <img id="interact-img" src="" alt="">
+        <h3 id="interact-name"></h3>
+        <p style="font-size:12px;color:#999;">❤️ <span id="interact-affection">0</span></p>
+        <div class="dialog-box" id="interact-dialog"></div>
+        <div class="choice-grid" id="interact-choices"></div>
+        <div id="minigame-area" class="hidden"></div>
+        <button class="nav-btn" onclick="closeInteract()" style="background:#999;border-color:#999;width:100%;margin-top:10px;">关闭</button>
+    </div>
+</div>
+
+<div id="ranking-page" class="hidden">
+    <div class="rank-header">
+        <h2>🏆 好感度排行榜</h2>
+        <button class="nav-btn" onclick="hideRanking()" style="width:auto;padding:8px 16px;">✕</button>
+    </div>
+    <div id="ranking-list"></div>
+</div>
+
+<script type="module">
+    // ⚠️ 请替换成你自己的 Supabase 项目 URL 和 anon key
+    const SUPABASE_URL = 'https://你的项目ID.supabase.co';
+    const SUPABASE_KEY = '你的anon key';
+    
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let playerName = localStorage.getItem('ba_player_name') || '';
+    let friends = [];
+    let currentFriend = null;
+    let minigameActive = false;
+    let minigameHits = 0;
+
+    function spawnParticles() {
+        const scene = document.getElementById('scene');
+        const emojis = ['🌸', '💮', '✨', '🦋', '🍂', '💫'];
+        setInterval(() => {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            p.style.left = Math.random() * 95 + '%';
+            p.style.animationDuration = (5 + Math.random() * 8) + 's';
+            p.style.fontSize = (16 + Math.random() * 24) + 'px';
+            scene.appendChild(p);
+            setTimeout(() => p.remove(), 13000);
+        }, 2000);
+    }
+
+    async function loadFriendsFromPool() {
+        const { data, error } = await supabase.from('friends_pool').select('*');
+        if (error) { console.error('加载朋友失败:', error); return []; }
+        return data.map(f => ({ name: f.name, photo: f.photo_base64 }));
+    }
+
+    async function init() {
+        spawnParticles();
+        friends = await loadFriendsFromPool();
+        if (friends.length > 0) {
+            document.getElementById('loading-img').src = friends[0].photo;
+        }
+        await new Promise(r => setTimeout(r, 2500));
+        document.getElementById('loading').classList.add('hidden');
+
+        if (!playerName) {
+            document.getElementById('name-modal').classList.remove('hidden');
+        } else {
+            document.getElementById('player-display').textContent = playerName;
+            renderFriends();
+        }
+    }
+
+    window.savePlayerName = function() {
+        const name = document.getElementById('player-name-input').value.trim();
+        if (!name) return alert('请输入名字！');
+        playerName = name;
+        localStorage.setItem('ba_player_name', name);
+        document.getElementById('name-modal').classList.add('hidden');
+        document.getElementById('player-display').textContent = name;
+        renderFriends();
+    };
+
+    async function renderFriends() {
+        const grid = document.getElementById('friends-grid');
+        if (friends.length === 0) {
+            grid.innerHTML = '<div class="empty-state">🌸 暂时没有朋友在大厅...</div>';
+            return;
+        }
+        grid.innerHTML = '';
+        for (const friend of friends) {
+            const { data } = await supabase.from('rankings')
+                .select('affection').eq('friend_name', friend.name)
+                .order('affection', { ascending: false }).limit(1);
+            const topAffection = data?.[0]?.affection || 0;
+
+            const card = document.createElement('div');
+            card.className = 'friend-card';
+            card.innerHTML = `
+                <img src="${friend.photo}" alt="${friend.name}">
+                <div class="name">${friend.name}</div>
+                <div class="hearts">❤️ ${topAffection}</div>
+                <div class="badge">TOP</div>
+            `;
+            card.onclick = () => openInteract(friend);
+            grid.appendChild(card);
+        }
+    }
+
+    async function canInteract(friendName) {
+        const today = new Date().toISOString().split('T')[0];
+        const { data } = await supabase.from('daily_logs')
+            .select('*').eq('friend_name', friendName).eq('player_name', playerName).eq('date', today);
+        return data.length === 0;
+    }
+
+    async function markInteracted(friendName) {
+        await supabase.from('daily_logs').insert({
+            friend_name: friendName, player_name: playerName,
+            date: new Date().toISOString().split('T')[0]
+        });
+    }
+
+    async function openInteract(friend) {
+        currentFriend = friend;
+        document.getElementById('interact-modal').classList.remove('hidden');
+        document.getElementById('interact-img').src = friend.photo;
+        document.getElementById('interact-name').textContent = friend.name;
+
+        const { data } = await supabase.from('rankings')
+            .select('affection').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
+        document.getElementById('interact-affection').textContent = data?.affection || 0;
+
+        if (!(await canInteract(friend.name))) {
+            document.getElementById('interact-dialog').textContent = `今天已经和 ${friend.name} 互动过了~明天再来吧！`;
+            document.getElementById('interact-choices').innerHTML = '';
+            document.getElementById('minigame-area').classList.add('hidden');
+            return;
+        }
+        Math.random() < 0.7 ? startDialog(friend) : startMinigame(friend);
+    }
+
+    function startDialog(friend) {
+        document.getElementById('minigame-area').classList.add('hidden');
+        const dialogs = [
+            { text: `${friend.name}：老师，今天放学后有空吗？`, choices: [
+                { text: '🌸 当然有空！一起去吃甜品吧', correct: true },
+                { text: '📝 抱歉，今天要批改作业...', correct: false },
+            ]},
+            { text: `${friend.name}：我写了封信...给你。`, choices: [
+                { text: '💌 打开看看', correct: true },
+                { text: '🗑️ 扔进垃圾桶', correct: false },
+            ]},
+            { text: `${friend.name}：今天天气真好，我们去屋顶吧。`, choices: [
+                { text: '☀️ 好啊，带上午餐', correct: true },
+                { text: '😴 我想睡觉...', correct: false },
+            ]}
+        ];
+        const d = dialogs[Math.floor(Math.random() * dialogs.length)];
+        document.getElementById('interact-dialog').textContent = d.text;
+        const div = document.getElementById('interact-choices');
+        div.innerHTML = '';
+        d.choices.forEach(c => {
+            const btn = document.createElement('button');
+            btn.className = 'choice-btn';
+            btn.textContent = c.text;
+            btn.onclick = async () => {
+                btn.classList.add(c.correct ? 'correct' : 'wrong');
+                setTimeout(async () => {
+                    await updateAffection(friend, c.correct ? 10 : -5);
+                    document.getElementById('interact-dialog').textContent = c.correct ? '❤️ 好感度 +10！' : '💔 好感度 -5...';
+                    div.innerHTML = '';
+                    await markInteracted(friend.name);
+                }, 500);
+            };
+            div.appendChild(btn);
+        });
+    }
+
+    function startMinigame(friend) {
+        document.getElementById('interact-choices').innerHTML = '';
+        document.getElementById('interact-dialog').textContent = `🎯 10秒内点击 ${friend.name} 的爱心！`;
+        const area = document.getElementById('minigame-area');
+        area.classList.remove('hidden');
+        minigameHits = 0; minigameActive = true;
+        spawnTarget();
+        setTimeout(async () => {
+            minigameActive = false; area.innerHTML = '';
+            const bonus = minigameHits * 3;
+            await updateAffection(friend, bonus);
+            document.getElementById('interact-dialog').textContent = `⏰ 点了 ${minigameHits} 次！好感度 +${bonus}`;
+            await markInteracted(friend.name);
+        }, 10000);
+    }
+
+    function spawnTarget() {
+        if (!minigameActive) return;
+        const area = document.getElementById('minigame-area');
+        area.innerHTML = '';
+        const t = document.createElement('div');
+        t.id = 'target-btn'; t.textContent = '❤️';
+        t.style.left = Math.random() * (area.offsetWidth - 50) + 'px';
+        t.style.top = Math.random() * (area.offsetHeight - 50) + 'px';
+        t.onclick = () => { minigameHits++; spawnTarget(); };
+        area.appendChild(t);
+    }
+
+    async function updateAffection(friend, delta) {
+        const { data: ex } = await supabase.from('rankings')
+            .select('*').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
+        if (ex) {
+            await supabase.from('rankings').update({ affection: ex.affection + delta }).eq('id', ex.id);
+        } else {
+            await supabase.from('rankings').insert({
+                friend_name: friend.name, player_name: playerName, affection: Math.max(0, delta)
+            });
+        }
+        const { data: up } = await supabase.from('rankings')
+            .select('affection').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
+        document.getElementById('interact-affection').textContent = up?.affection || 0;
+        renderFriends();
+    }
+
+    async function showRanking() {
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('ranking-page').classList.remove('hidden');
+        const { data } = await supabase.from('rankings')
+            .select('*').order('affection', { ascending: false }).limit(50);
+        document.getElementById('ranking-list').innerHTML = data.map((r, i) => {
+            let cls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+            return `<div class="rank-item">
+                <span class="rank-num ${cls}">${i + 1}</span>
+                <div class="rank-info"><div class="rank-name">${r.friend_name}</div><div class="rank-player">攻略者：${r.player_name}</div></div>
+                <span class="rank-hearts">❤️ ${r.affection}</span>
+            </div>`;
+        }).join('');
+    }
+
+    window.showRanking = showRanking;
+    window.hideRanking = () => {
+        document.getElementById('ranking-page').classList.add('hidden');
+        document.getElementById('main-page').style.display = 'block';
+    };
+    window.showMain = () => {
+        document.getElementById('ranking-page').classList.add('hidden');
+        document.getElementById('main-page').style.display = 'block';
+    };
+    window.closeInteract = () => {
+        document.getElementById('interact-modal').classList.add('hidden');
+        minigameActive = false;
+        renderFriends();
+    };
+
+    init();
+</script>
+</body>
+</html>
