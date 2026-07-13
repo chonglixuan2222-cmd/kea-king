@@ -6,6 +6,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Kea King 养成游戏</title>
+    <!-- 改用稳定版 CDN 加载 Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --pink: #ff7eb3; --peach: #ffa78c; --cream: #fff5ee;
@@ -203,7 +205,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 <div id="loading">
     <div class="loading-frame">
         <img id="loading-img" src="" alt="">
-        <p>正在进入 杰哥の校 <span class="loading-dots"></span></p>
+        <p>正在进入 Kea King<span class="loading-dots"></span></p>
     </div>
 </div>
 
@@ -253,13 +255,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     <div id="ranking-list"></div>
 </div>
 
-<script type="module">
-    // ⚠️ 已替换为你的真实 Supabase 信息
+<script>
+    // 已使用你的 Supabase 凭据，直接可用
     const SUPABASE_URL = 'https://sbtefkcqrfnojmntpefy.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGVma2NxcmZub2ptbnRwZWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzM2NjgsImV4cCI6MjA5OTM0OTY2OH0.vAaoXCNqpPDLlESsv7bhT0abzcLQyLtdKL3NrZplcLo';
     
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let playerName = localStorage.getItem('ba_player_name') || '';
     let friends = [];
@@ -283,18 +284,38 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     }
 
     async function loadFriendsFromPool() {
-        const { data, error } = await supabase.from('friends_pool').select('*');
-        if (error) { console.error('加载朋友失败:', error); return []; }
-        return data.map(f => ({ name: f.name, photo: f.photo_base64 }));
+        try {
+            const { data, error } = await supabase.from('friends_pool').select('*');
+            if (error) {
+                console.error('加载朋友失败:', error);
+                return [];
+            }
+            return data.map(f => ({ name: f.name, photo: f.photo_base64 }));
+        } catch (e) {
+            console.error('Supabase 连接异常:', e);
+            return [];
+        }
     }
 
     async function init() {
         spawnParticles();
+        // 设置超时保护：最多等 6 秒强制进入大厅
+        const timeout = setTimeout(() => {
+            document.getElementById('loading').classList.add('hidden');
+            if (!playerName) {
+                document.getElementById('name-modal').classList.remove('hidden');
+            } else {
+                document.getElementById('player-display').textContent = playerName;
+                renderFriends();
+            }
+        }, 6000);
+
         friends = await loadFriendsFromPool();
         if (friends.length > 0) {
             document.getElementById('loading-img').src = friends[0].photo;
         }
         await new Promise(r => setTimeout(r, 2500));
+        clearTimeout(timeout);
         document.getElementById('loading').classList.add('hidden');
 
         if (!playerName) {
