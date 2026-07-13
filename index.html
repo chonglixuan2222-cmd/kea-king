@@ -61,6 +61,11 @@
         }
         .loading-dots::after { content: ''; animation: dots 1.5s infinite; }
         @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+        .debug-info {
+            position: fixed; bottom: 100px; left: 10px; background: rgba(0,0,0,0.8); 
+            color: #0f0; font-size: 12px; padding: 10px; border-radius: 5px; 
+            max-width: 300px; z-index: 1000; font-family: monospace;
+        }
         .title-bar {
             position: sticky; top: 0; z-index: 20; background: rgba(255,245,238,0.85);
             backdrop-filter: blur(15px); padding: 12px 18px; display: flex;
@@ -206,6 +211,8 @@
     </div>
 </div>
 
+<div id="debug-info" class="debug-info"></div>
+
 <div id="name-modal">
     <div class="name-card">
         <h3>🌸 老师，请告诉我你的名字</h3>
@@ -264,6 +271,11 @@
     let minigameActive = false;
     let minigameHits = 0;
 
+    function debug(msg) {
+        console.log('[DEBUG]', msg);
+        document.getElementById('debug-info').textContent = msg;
+    }
+
     function spawnParticles() {
         const scene = document.getElementById('scene');
         const emojis = ['🌸', '💮', '✨', '🦋', '🍂', '💫'];
@@ -281,13 +293,24 @@
 
     async function loadFriendsFromPool() {
         try {
-            const { data, error } = await supabase.from('friends_pool').select('*');
+            debug('正在连接 Supabase...');
+            const { data, error } = await supabase.from('friends_pool').select('*').limit(10);
+            
             if (error) {
-                console.error('加载朋友失败:', error);
+                debug('❌ Supabase 错误: ' + (error.message || JSON.stringify(error)));
+                console.error('Supabase 查询错误:', error);
                 return [];
             }
-            return data.map(f => ({ name: f.name, photo: f.photo_base64 }));
+            
+            if (!data || data.length === 0) {
+                debug('⚠️ friends_pool 表为空或不存在');
+                return [];
+            }
+            
+            debug('✅ 加载成功: ' + data.length + '个朋友');
+            return data.map(f => ({ name: f.name, photo: f.photo_base64 || 'data:image/svg+xml,%3Csvg/%3E' }));
         } catch (e) {
+            debug('❌ 异常: ' + (e.message || e.toString()));
             console.error('Supabase 连接异常:', e);
             return [];
         }
@@ -295,7 +318,10 @@
 
     async function init() {
         spawnParticles();
+        debug('初始化中...');
+        
         const timeout = setTimeout(() => {
+            debug('⏱️ 加载超时，跳过');
             document.getElementById('loading').classList.add('hidden');
             if (!playerName) {
                 document.getElementById('name-modal').classList.remove('hidden');
@@ -303,15 +329,20 @@
                 document.getElementById('player-display').textContent = playerName;
                 renderFriends();
             }
-        }, 6000);
+        }, 5000);
 
         friends = await loadFriendsFromPool();
+        
         if (friends.length > 0) {
             document.getElementById('loading-img').src = friends[0].photo;
+        } else {
+            document.getElementById('loading-img').src = 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22100%22%20height=%22100%22%3E%3Crect%20fill=%22%23ffb3d9%22%20width=%22100%22%20height=%22100%22/%3E%3Ctext%20x=%2250%22%20y=%2250%22%20font-size=%2240%22%20text-anchor=%22middle%22%20dominant-baseline=%22middle%22%3E🌸%3C/text%3E%3C/svg%3E';
         }
-        await new Promise(r => setTimeout(r, 2500));
+        
+        await new Promise(r => setTimeout(r, 2000));
         clearTimeout(timeout);
         document.getElementById('loading').classList.add('hidden');
+        document.getElementById('debug-info').style.display = 'none';
 
         if (!playerName) {
             document.getElementById('name-modal').classList.remove('hidden');
@@ -371,14 +402,12 @@
         });
     }
 
-    // 健壮版互动入口
     async function openInteract(friend) {
         currentFriend = friend;
         document.getElementById('interact-modal').classList.remove('hidden');
         document.getElementById('interact-img').src = friend.photo;
         document.getElementById('interact-name').textContent = friend.name;
 
-        // 获取好感度（出错不影响剧情）
         try {
             const { data } = await supabase.from('rankings')
                 .select('affection').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
@@ -387,7 +416,6 @@
             document.getElementById('interact-affection').textContent = '0';
         }
 
-        // 检查每日互动
         let alreadyInteracted = false;
         try {
             alreadyInteracted = !(await canInteract(friend.name));
@@ -402,7 +430,6 @@
             return;
         }
 
-        // 无论数据库状态如何，强制开始剧情
         Math.random() < 0.7 ? startDialog(friend) : startMinigame(friend);
     }
 
